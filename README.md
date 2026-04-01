@@ -1,36 +1,73 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Thermostat Dashboard
 
-## Getting Started
+A local web dashboard for live and historical thermostat telemetry. Reads from the MariaDB-backed sidecar REST API and presents real-time status, charts, PID gain suggestions, and a setpoint audit log.
 
-First, run the development server:
+## Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/) (for production)
+- [Node.js 20+](https://nodejs.org/) (for local dev only)
+
+## Pages
+
+| Page | Path | Description |
+|---|---|---|
+| Overview | `/` | Live floor status cards with a 2-hour sparkline. Refreshes every 60 s. |
+| History | `/history` | Telemetry charts: temp vs setpoint, humidity, lead minutes, precon activity. |
+| Rates | `/rates` | Learned rate history, PID gain suggestions, and precon accuracy scatter plot. |
+| Setpoints | `/setpoints` | Paginated audit log of every setpoint change, filterable by floor and reason. |
+
+## Port mapping
+
+| Host port | Container port | Service |
+|---|---|---|
+| `3090` | `3000` | thermostat-dashboard |
+
+## Local development
 
 ```bash
+# 1. Clone and enter the directory
+cd thermostat-dashboard
+
+# 2. Configure environment
+cp .env.local.example .env.local
+# Edit .env.local and set NEXT_PUBLIC_SIDECAR_URL if needed
+
+# 3. Install dependencies
+npm install
+
+# 4. Start dev server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Production (Docker)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+# Build and start
+docker-compose up -d --build
 
-## Learn More
+# View logs
+docker-compose logs -f thermostat-dashboard
+```
 
-To learn more about Next.js, take a look at the following resources:
+Dashboard is served at `http://<nas-ip>:3090`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Updating
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+docker-compose down
+docker-compose up -d --build
+```
 
-## Deploy on Vercel
+## Configuration
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Variable | Default | Description |
+|---|---|---|
+| `NEXT_PUBLIC_SIDECAR_URL` | `http://10.0.0.240:3077` | Sidecar API base URL |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Set in `docker-compose.yml` (for production) or `.env.local` (for dev). No rebuild required when changing the URL in `docker-compose.yml` — it is injected at runtime.
+
+## CORS note
+
+The dashboard fetches the sidecar directly from the browser. If you see CORS errors, enable the server-side proxy by routing requests through `/api/proxy/[...path]`.
