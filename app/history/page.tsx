@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import TempChart from "@/components/TempChart";
 import HumidityChart from "@/components/HumidityChart";
 import LeadMinutesChart from "@/components/LeadMinutesChart";
@@ -43,24 +43,29 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await getTelemetry({
-        from: fromForRange(range),
-        sort: "asc",
-        limit: 500,
-      });
-      setRows(data);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load data");
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      try {
+        const data = await getTelemetry({
+          from: fromForRange(range),
+          sort: "asc",
+          limit: 500,
+        });
+        if (cancelled) return;
+        setRows(data);
+        setError(null);
+      } catch (e) {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : "Failed to load data");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
+    load();
+    return () => { cancelled = true; };
   }, [range]);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
 
   const activeFloors: (1 | 2)[] =
     floorSel === "both" ? [1, 2] : floorSel === "1" ? [1] : [2];
