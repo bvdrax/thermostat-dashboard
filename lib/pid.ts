@@ -1,19 +1,24 @@
 import type { RateHistoryRow } from "./types";
 
-export interface PIDSuggestion {
+// ---------------------------------------------------------------------------
+// Thermal characterisation
+// ---------------------------------------------------------------------------
+
+export interface ThermalParams {
   floor: 1 | 2;
   mode: "heat" | "cool";
+  /** EMA-smoothed rate in °F/min */
   learnedRate: number;
+  /** EMA-smoothed outdoor factor (captures temp, wind, humidity influence) */
   outdoorFactor: number;
-  kp: number;
-  ti: number;
-  td: number;
-  deadband: number;
+  /** Number of rate_history rows that fed this estimate */
+  sampleCount: number;
 }
 
 /**
- * Smooth a series of values using an exponential moving average.
- * alpha = 0.2 gives heavier weight to recent observations while dampening noise.
+ * Exponential moving average (α = 0.2).
+ * Recent readings carry more weight while older history still smooths noise.
+ * Rows should be sorted oldest-first so the EMA converges toward current state.
  */
 function ema(values: number[], alpha = 0.2): number {
   if (values.length === 0) return 0;
@@ -24,28 +29,11 @@ function ema(values: number[], alpha = 0.2): number {
   return result;
 }
 
-/**
- * Derive PID gain suggestions from learned rate history rows for one floor+mode.
- *
- * The system uses on/off bang-bang control, not a true PID loop. These
- * suggestions are based on plant characterisation — they describe how the
- * physical space responds — and should be treated as advisory only.
- *
- * Computation:
- *   Kp  = learnedRate * outdoorFactor
- *           — process gain: °F/min per unit of effort
- *   Ti  = 1 / Kp
- *           — integral time: minutes to correct a 1° offset at Kp gain
- *   Td  = Ti / 4
- *           — derivative time: conservative ZN-inspired starting point
- *   deadband = learnedRate * 5
- *           — minimum ±°F to avoid short-cycling (5 min of drift tolerance)
- */
-export function computePIDSuggestion(
+export function computeThermalParam(
   floor: 1 | 2,
   mode: "heat" | "cool",
   rows: RateHistoryRow[]
-): PIDSuggestion | null {
+): ThermalParams | null {
   const floorRows = rows.filter((r) => r.floor === floor);
   if (floorRows.length === 0) return null;
 
@@ -61,21 +49,16 @@ export function computePIDSuggestion(
 
   if (learnedRate <= 0) return null;
 
-  const kp = learnedRate * outdoorFactor;
-  const ti = 1 / kp;
-  const td = ti / 4;
-  const deadband = learnedRate * 5;
-
-  return { floor, mode, learnedRate, outdoorFactor, kp, ti, td, deadband };
+  return {
+    floor,
+    mode,
+    learnedRate,
+    outdoorFactor,
+    sampleCount: floorRows.length,
+  };
 }
 
-/**
- * Compute suggestions for all four floor/mode combinations from a shared
- * rate history result set.
- */
-export function computeAllSuggestions(
-  rows: RateHistoryRow[]
-): PIDSuggestion[] {
+export function computeAllThermalParams(rows: RateHistoryRow[]): ThermalParams[] {
   const combos: Array<{ floor: 1 | 2; mode: "heat" | "cool" }> = [
     { floor: 1, mode: "heat" },
     { floor: 1, mode: "cool" },
@@ -83,9 +66,31 @@ export function computeAllSuggestions(
     { floor: 2, mode: "cool" },
   ];
   return combos
-    .map(({ floor, mode }) => computePIDSuggestion(floor, mode, rows))
-    .filter((s): s is PIDSuggestion => s !== null);
+    .map(({ floor, mode }) => computeThermalParam(floor, mode, rows))
+    .filter((s): s is ThermalParams => s !== null);
 }
+
+/**
+ * Estimate minutes needed to bridge a temperature gap given learned thermal params.
+ *
+ *   effectiveRate = learnedRate × outdoorFactor
+ *   leadMinutes   = deltaTemp / effectiveRate
+ *
+ * deltaTemp should be positive (caller takes Math.abs if needed).
+ * Returns null if rate is zero or params are missing.
+ */
+export function computeLeadTime(
+  deltaTemp: number,
+  params: ThermalParams
+): number | null {
+  const effectiveRate = params.learnedRate * params.outdoorFactor;
+  if (effectiveRate <= 0 || deltaTemp <= 0) return null;
+  return deltaTemp / effectiveRate;
+}
+
+// ---------------------------------------------------------------------------
+// Precon event detection
+// ---------------------------------------------------------------------------
 
 export interface PreconEvent {
   floor: 1 | 2;

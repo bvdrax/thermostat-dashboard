@@ -1,17 +1,24 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import RateChart from "@/components/RateChart";
-import PIDPanel from "@/components/PIDPanel";
+import ThermalCorrelationChart from "@/components/ThermalCorrelationChart";
+import LeadTimeEstimator from "@/components/LeadTimeEstimator";
 import PreconAccuracyChart from "@/components/PreconAccuracyChart";
 import type { RateHistoryRow, TelemetryRow } from "@/lib/types";
-import { getRateHistory, getTelemetry, daysAgo, hoursAgo } from "@/lib/api";
 import {
-  computeAllSuggestions,
+  getRateHistory,
+  getTelemetry,
+  getLatestTelemetry,
+  daysAgo,
+  hoursAgo,
+} from "@/lib/api";
+import {
+  computeAllThermalParams,
   detectPreconEvents,
   computePreconStats,
 } from "@/lib/pid";
-import type { PIDSuggestion, PreconEvent, PreconStats } from "@/lib/pid";
+import type { ThermalParams, PreconEvent, PreconStats } from "@/lib/pid";
 
 type Range = "6h" | "24h" | "7d" | "30d";
 type FloorSel = "1" | "2" | "both";
@@ -25,62 +32,82 @@ const RANGES: { label: string; value: Range }[] = [
 
 function fromForRange(range: Range): string {
   switch (range) {
-    case "6h": return hoursAgo(6);
+    case "6h":  return hoursAgo(6);
     case "24h": return hoursAgo(24);
-    case "7d": return daysAgo(7);
+    case "7d":  return daysAgo(7);
     case "30d": return daysAgo(30);
   }
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
-      <h2 className="text-slate-200 font-semibold text-base mb-4">{title}</h2>
+      <div className="mb-4">
+        <h2 className="text-slate-200 font-semibold text-base">{title}</h2>
+        {subtitle && (
+          <p className="text-slate-500 text-xs mt-0.5">{subtitle}</p>
+        )}
+      </div>
       {children}
     </div>
   );
 }
 
-export default function RatesPage() {
+export default function ThermalPage() {
   const [range, setRange] = useState<Range>("7d");
   const [floorSel, setFloorSel] = useState<FloorSel>("both");
+
   const [rateRows, setRateRows] = useState<RateHistoryRow[]>([]);
   const [telemetryRows, setTelemetryRows] = useState<TelemetryRow[]>([]);
-  const [suggestions, setSuggestions] = useState<PIDSuggestion[]>([]);
+  const [thermalParams, setThermalParams] = useState<ThermalParams[]>([]);
   const [preconEvents, setPreconEvents] = useState<PreconEvent[]>([]);
   const [preconStats, setPreconStats] = useState<PreconStats>({
-    mean: 0,
-    withinOne: 0,
-    withinTwo: 0,
-    count: 0,
+    mean: 0, withinOne: 0, withinTwo: 0, count: 0,
   });
+  const [latestF1, setLatestF1] = useState<TelemetryRow | null>(null);
+  const [latestF2, setLatestF2] = useState<TelemetryRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [rates, telem] = await Promise.all([
-        getRateHistory({ from: fromForRange(range), sort: "asc", limit: 500 }),
-        getTelemetry({ from: fromForRange(range), sort: "asc", limit: 1000 }),
-      ]);
-      setRateRows(rates);
-      setTelemetryRows(telem);
-      setSuggestions(computeAllSuggestions(rates));
-      const events = detectPreconEvents(telem);
-      setPreconEvents(events);
-      setPreconStats(computePreconStats(events));
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load data");
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      try {
+        const [rates, telem, f1, f2] = await Promise.all([
+          getRateHistory({ from: fromForRange(range), sort: "asc", limit: 500 }),
+          getTelemetry({ from: fromForRange(range), sort: "asc", limit: 1000 }),
+          getLatestTelemetry(1),
+          getLatestTelemetry(2),
+        ]);
+        if (cancelled) return;
+        setRateRows(rates);
+        setTelemetryRows(telem);
+        setThermalParams(computeAllThermalParams(rates));
+        const events = detectPreconEvents(telem);
+        setPreconEvents(events);
+        setPreconStats(computePreconStats(events));
+        setLatestF1(f1);
+        setLatestF2(f2);
+        setError(null);
+      } catch (e) {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : "Failed to load data");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
+    load();
+    return () => { cancelled = true; };
   }, [range]);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
-
-  void telemetryRows;
 
   const activeFloors: (1 | 2)[] =
     floorSel === "both" ? [1, 2] : floorSel === "1" ? [1] : [2];
@@ -93,10 +120,19 @@ export default function RatesPage() {
     floorSel === "both" ? true : e.floor === Number(floorSel)
   );
 
+  void telemetryRows;
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-white">Rate History &amp; PID Analysis</h1>
+        <div>
+          <h1 className="text-xl font-semibold text-white">
+            Thermal Characterisation
+          </h1>
+          <p className="text-slate-500 text-xs mt-0.5">
+            How this building heats and cools — and what that means for precon lead times
+          </p>
+        </div>
         <div className="flex flex-wrap gap-2">
           <div className="flex gap-1 bg-slate-800 border border-slate-700 rounded-lg p-1">
             {RANGES.map((r) => (
@@ -139,24 +175,44 @@ export default function RatesPage() {
 
       {loading ? (
         <div className="flex flex-col gap-4">
-          {[1, 2, 3].map((i) => (
+          {[1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className="bg-slate-800 border border-slate-700 rounded-xl p-5 h-72 animate-pulse"
+              className="bg-slate-800 border border-slate-700 rounded-xl p-5 h-64 animate-pulse"
             />
           ))}
         </div>
       ) : (
         <div className="flex flex-col gap-4">
-          <Section title="Learned Rate History">
+          <Section
+            title="Learned Rate History"
+            subtitle="Heat and cool rates over time with outdoor temperature overlay"
+          >
             <RateChart rows={filteredRates} floors={activeFloors} />
           </Section>
 
-          <Section title="PID Gain Suggestions">
-            <PIDPanel suggestions={suggestions} />
+          <Section
+            title="Outdoor Temperature Correlation"
+            subtitle="Rate vs outdoor temp — shows how environment drives heating and cooling speed"
+          >
+            <ThermalCorrelationChart rows={filteredRates} floors={activeFloors} />
           </Section>
 
-          <Section title="Precon Accuracy">
+          <Section
+            title="Lead Time Estimator"
+            subtitle="Computed lead time based on current conditions and learned rates"
+          >
+            <LeadTimeEstimator
+              floor1={latestF1}
+              floor2={latestF2}
+              params={thermalParams}
+            />
+          </Section>
+
+          <Section
+            title="Precon Accuracy"
+            subtitle="How closely assigned lead times matched actual thermal performance"
+          >
             <PreconAccuracyChart
               events={filteredPreconEvents}
               stats={computePreconStats(filteredPreconEvents)}

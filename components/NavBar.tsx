@@ -7,7 +7,7 @@ import { Thermometer } from "lucide-react";
 const links = [
   { href: "/", label: "Overview" },
   { href: "/history", label: "History" },
-  { href: "/rates", label: "Rates" },
+  { href: "/rates", label: "Thermal" },
   { href: "/setpoints", label: "Setpoints" },
 ];
 
