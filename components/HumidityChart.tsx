@@ -1,5 +1,7 @@
 "use client";
 
+import { formatTime } from "@/lib/format";
+
 import {
   LineChart,
   Line,
@@ -16,15 +18,6 @@ import { useMemo } from "react";
 interface HumidityChartProps {
   rows: TelemetryRow[];
   floors: (1 | 2)[];
-}
-
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 export default function HumidityChart({ rows, floors }: HumidityChartProps) {

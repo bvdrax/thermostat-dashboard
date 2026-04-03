@@ -1,5 +1,7 @@
 "use client";
 
+import { formatTimeOnly } from "@/lib/format";
+
 import {
   LineChart,
   Line,
@@ -17,10 +19,7 @@ interface SparklineChartProps {
 
 export default function SparklineChart({ rows }: SparklineChartProps) {
   const data = rows.map((r) => ({
-    time: new Date(r.recorded_at).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    }),
+    time: formatTimeOnly(r.recorded_at),
     [`temp_f${r.floor}`]: r.current_temp,
     [`sp_f${r.floor}`]: r.setpoint,
   }));
@@ -28,10 +27,7 @@ export default function SparklineChart({ rows }: SparklineChartProps) {
   // merge rows by timestamp bucket
   const merged: Record<string, Record<string, number | null>> = {};
   rows.forEach((r) => {
-    const key = new Date(r.recorded_at).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const key = formatTimeOnly(r.recorded_at);
     if (!merged[key]) merged[key] = { time: key as unknown as number };
     merged[key][`temp_f${r.floor}`] = r.current_temp;
     merged[key][`sp_f${r.floor}`] = r.setpoint;

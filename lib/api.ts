@@ -2,14 +2,16 @@ import type {
   TelemetryRow,
   SetpointChangeRow,
   RateHistoryRow,
+  StateRow,
   MetaResponse,
   PaginatedResponse,
   FetchParams,
   FloorFilter,
 } from "./types";
 
-const BASE_URL =
-  process.env.NEXT_PUBLIC_SIDECAR_URL || "http://10.0.0.240:3077";
+// All browser fetches go through the Next.js proxy route to avoid CORS.
+// The proxy route reads NEXT_PUBLIC_SIDECAR_URL server-side and forwards the request.
+const BASE_URL = "/api/proxy";
 
 // MariaDB drivers often return numeric columns as strings over JSON.
 // These coercers normalise every row to the typed shape.
@@ -150,6 +152,28 @@ export async function getLatestTelemetry(
   });
   const row = page.data[0] ?? null;
   return row ? coerceTelemetry(row) : null;
+}
+
+export async function getState(floor: 1 | 2): Promise<StateRow> {
+  const res = await fetch(`${BASE_URL}/state?floor=${floor}`, {
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Sidecar error ${res.status}: /state?floor=${floor}`);
+  const r: StateRow = await res.json();
+  return {
+    ...r,
+    floor: num(r.floor) as 1 | 2,
+    heat_rate: num(r.heat_rate),
+    cool_rate: num(r.cool_rate),
+    last_temp: num(r.last_temp),
+    last_ts: num(r.last_ts),
+    last_mode_switch_ts: num(r.last_mode_switch_ts),
+    cycle_start_temp: num(r.cycle_start_temp),
+    cycle_start_temp_prev: num(r.cycle_start_temp_prev),
+    cycle_start_ts: num(r.cycle_start_ts),
+    last_outside: num(r.last_outside),
+    last_script_setpoint: num(r.last_script_setpoint),
+  };
 }
 
 export function hoursAgo(hours: number): string {

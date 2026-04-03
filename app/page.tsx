@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { formatTimeOnly } from "@/lib/format";
 import FloorCard from "@/components/FloorCard";
 import SparklineChart from "@/components/SparklineChart";
 import type { TelemetryRow } from "@/lib/types";
@@ -49,7 +50,7 @@ export default function OverviewPage() {
         <div className="flex items-center gap-3">
           {lastRefresh && (
             <span className="text-slate-500 text-xs">
-              Refreshed {lastRefresh.toLocaleTimeString()}
+              Refreshed {formatTimeOnly(lastRefresh.toISOString())}
             </span>
           )}
           <button

@@ -1,6 +1,7 @@
 "use client";
 
 import type { SetpointChangeRow } from "@/lib/types";
+import { formatDateTime } from "@/lib/format";
 
 interface SetpointLogProps {
   rows: SetpointChangeRow[];
@@ -15,6 +16,7 @@ interface SetpointLogProps {
 
 const REASON_STYLES: Record<string, string> = {
   schedule_day: "bg-green-400/20 text-green-300 border border-green-400/30",
+  schedule_afternoon: "bg-amber-400/20 text-amber-300 border border-amber-400/30",
   schedule_night: "bg-blue-900/40 text-blue-300 border border-blue-700/40",
   precon: "bg-violet-400/20 text-violet-300 border border-violet-400/30",
   manual_override: "bg-orange-400/20 text-orange-300 border border-orange-400/30",
@@ -22,6 +24,7 @@ const REASON_STYLES: Record<string, string> = {
 
 const REASON_LABELS: Record<string, string> = {
   schedule_day: "Schedule Day",
+  schedule_afternoon: "Schedule Afternoon",
   schedule_night: "Schedule Night",
   precon: "Precon",
   manual_override: "Manual Override",
@@ -103,7 +106,7 @@ export default function SetpointLog({
                   className="hover:bg-slate-700/20 transition-colors"
                 >
                   <td className="py-3 px-4 font-mono text-slate-300 text-xs whitespace-nowrap">
-                    {new Date(row.changed_at).toLocaleString()}
+                    {formatDateTime(row.changed_at)}
                   </td>
                   <td className="py-3 px-4 text-slate-300">Floor {row.floor}</td>
                   <td className="py-3 px-4 text-right font-mono text-slate-400">

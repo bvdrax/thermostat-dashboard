@@ -5,11 +5,12 @@ import RateChart from "@/components/RateChart";
 import ThermalCorrelationChart from "@/components/ThermalCorrelationChart";
 import LeadTimeEstimator from "@/components/LeadTimeEstimator";
 import PreconAccuracyChart from "@/components/PreconAccuracyChart";
-import type { RateHistoryRow, TelemetryRow } from "@/lib/types";
+import type { RateHistoryRow, TelemetryRow, StateRow } from "@/lib/types";
 import {
   getRateHistory,
   getTelemetry,
   getLatestTelemetry,
+  getState,
   daysAgo,
   hoursAgo,
 } from "@/lib/api";
@@ -74,6 +75,8 @@ export default function ThermalPage() {
   });
   const [latestF1, setLatestF1] = useState<TelemetryRow | null>(null);
   const [latestF2, setLatestF2] = useState<TelemetryRow | null>(null);
+  const [stateF1, setStateF1] = useState<StateRow | null>(null);
+  const [stateF2, setStateF2] = useState<StateRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,21 +85,34 @@ export default function ThermalPage() {
     async function load() {
       setLoading(true);
       try {
-        const [rates, telem, f1, f2] = await Promise.all([
+        const [rates, telem, f1, f2, s1, s2] = await Promise.all([
           getRateHistory({ from: fromForRange(range), sort: "asc", limit: 500 }),
           getTelemetry({ from: fromForRange(range), sort: "asc", limit: 1000 }),
           getLatestTelemetry(1),
           getLatestTelemetry(2),
+          getState(1),
+          getState(2),
         ]);
         if (cancelled) return;
         setRateRows(rates);
         setTelemetryRows(telem);
-        setThermalParams(computeAllThermalParams(rates));
+        // Override learnedRate with the freshest values from /state (cycle-complete accuracy)
+        // but keep outdoorFactor from rate_history for environmental adjustment.
+        const baseParams = computeAllThermalParams(rates);
+        const mergedParams = baseParams.map((p) => {
+          const s = p.floor === 1 ? s1 : s2;
+          return s
+            ? { ...p, learnedRate: p.mode === "heat" ? s.heat_rate : s.cool_rate }
+            : p;
+        });
+        setThermalParams(mergedParams);
         const events = detectPreconEvents(telem);
         setPreconEvents(events);
         setPreconStats(computePreconStats(events));
         setLatestF1(f1);
         setLatestF2(f2);
+        setStateF1(s1);
+        setStateF2(s2);
         setError(null);
       } catch (e) {
         if (cancelled) return;
@@ -121,6 +137,8 @@ export default function ThermalPage() {
   );
 
   void telemetryRows;
+  void stateF1;
+  void stateF2;
 
   return (
     <div className="flex flex-col gap-6">

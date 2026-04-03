@@ -1,6 +1,7 @@
 "use client";
 
 import type { TelemetryRow } from "@/lib/types";
+import { formatTimeOnly } from "@/lib/format";
 import { Wind } from "lucide-react";
 
 interface FloorCardProps {
@@ -135,10 +136,7 @@ export default function FloorCard({ floor, data }: FloorCardProps) {
 
       <p className="text-slate-600 text-xs mt-auto">
         Updated{" "}
-        {new Date(data.recorded_at).toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        })}
+        {formatTimeOnly(data.recorded_at)}
       </p>
     </div>
   );
