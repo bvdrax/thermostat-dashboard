@@ -28,6 +28,7 @@ export interface SetpointChangeRow {
   reason:
     | "schedule_day"
     | "schedule_night"
+    | "schedule_afternoon"
     | "precon"
     | "manual_override"
     | null;
@@ -41,6 +42,24 @@ export interface RateHistoryRow {
   cool_rate: number;
   outdoor_temp: number | null;
   outdoor_factor: number | null;
+}
+
+export interface StateRow {
+  floor: 1 | 2;
+  updated_at: string;
+  heat_rate: number;
+  cool_rate: number;
+  last_temp: number;
+  last_ts: number;
+  last_action: string;
+  last_mode: "heat" | "cool";
+  last_mode_switch_ts: number;
+  cycle_start_temp: number;
+  cycle_start_temp_prev: number;
+  cycle_start_ts: number;
+  last_outside: number;
+  last_script_setpoint: number;
+  last_script_mode: "heat" | "cool";
 }
 
 export interface MetaResponse {

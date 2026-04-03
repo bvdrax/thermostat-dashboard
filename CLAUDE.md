@@ -56,6 +56,10 @@ docker-compose up -d --build   # build and start
 docker-compose logs -f         # tail logs
 ```
 
-## CORS
+## CORS / Proxy
 
-The dashboard fetches the sidecar directly from the browser. If CORS errors appear, the server-side proxy at `app/api/proxy/[...path]/route.ts` can relay requests — update `lib/api.ts` to prefix fetch URLs with `/api/proxy`.
+All browser fetches go through the Next.js server-side proxy at `app/api/proxy/[...path]/route.ts`. `lib/api.ts` uses `BASE_URL = "/api/proxy"` — do not change this back to a direct sidecar URL. The proxy reads `NEXT_PUBLIC_SIDECAR_URL` server-side and forwards requests, avoiding CORS restrictions in both dev and Docker.
+
+## Deployment
+
+Use the VSCode task **"Deploy: sync + rebuild Docker"** (Ctrl+Shift+P → Tasks: Run Task). This runs `scripts/deploy.sh --rebuild` which tars the project (excluding `.next`, `node_modules`, `.git`) and extracts it on the NAS via SSH, then triggers `docker-compose up -d --build`.
