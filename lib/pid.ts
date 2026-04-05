@@ -94,6 +94,8 @@ export function computeLeadTime(
 
 export interface PreconEvent {
   floor: 1 | 2;
+  startAt: string;
+  endAt: string;
   leadMinutes: number | null;
   startTemp: number;
   targetSetpoint: number;
@@ -146,6 +148,8 @@ export function detectPreconEvents(
         if (lastInBlock.setpoint !== null) {
           events.push({
             floor,
+            startAt: startRow.recorded_at,
+            endAt: lastInBlock.recorded_at,
             leadMinutes: startRow.lead_minutes,
             startTemp: startRow.current_temp,
             targetSetpoint: lastInBlock.setpoint,
