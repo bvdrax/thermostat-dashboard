@@ -81,12 +81,15 @@ export default function RateChart({ rows, floors }: RateChartProps) {
             fontSize: 12,
           }}
           labelFormatter={(label: unknown) => formatTime(String(label))}
-          formatter={(val: unknown, name: unknown) => [
-            String(name) === "Outdoor Temp"
-              ? `${Number(val).toFixed(1)}°F`
-              : `${Number(val).toFixed(4)}°/min`,
-            String(name),
-          ]}
+          formatter={(val: unknown, name: unknown) => {
+            if (String(name) === "time") return null;
+            return [
+              String(name) === "Outdoor Temp"
+                ? `${Number(val).toFixed(1)}°F`
+                : `${Number(val).toFixed(4)}°/min`,
+              String(name),
+            ];
+          }}
         />
         <Legend wrapperStyle={{ fontSize: 12, color: "#94a3b8", paddingTop: 4 }} />
         {floors.includes(1) && (

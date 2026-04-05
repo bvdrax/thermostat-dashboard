@@ -1,49 +1,39 @@
 "use client";
 
 import { formatTime } from "@/lib/format";
-
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-  Legend,
-} from "recharts";
-import type { TelemetryRow } from "@/lib/types";
+import type { PreconEvent } from "@/lib/pid";
 import { useMemo } from "react";
 
 interface PreconActivityChartProps {
-  rows: TelemetryRow[];
+  events: PreconEvent[];
   floors: (1 | 2)[];
 }
 
+const FLOOR_COLORS: Record<1 | 2, { bg: string; label: string }> = {
+  1: { bg: "#a855f7", label: "F1 Precon" }, // vivid purple
+  2: { bg: "#14b8a6", label: "F2 Precon" }, // teal
+};
+
 export default function PreconActivityChart({
-  rows,
+  events,
   floors,
 }: PreconActivityChartProps) {
-  const data = useMemo(() => {
-    const map = new Map<string, Record<string, number>>();
-    rows
-      .filter((r) => r.precon_active === 1)
-      .forEach((r) => {
-        const key = r.recorded_at;
-        if (!map.has(key)) map.set(key, { time: key as unknown as number });
-        const entry = map.get(key)!;
-        if (floors.includes(r.floor)) {
-          entry[`precon${r.floor}`] = 1;
-        }
-      });
-    return Array.from(map.values()).sort(
-      (a, b) =>
-        new Date(a.time as unknown as string).getTime() -
-        new Date(b.time as unknown as string).getTime()
-    );
-  }, [rows, floors]);
+  const filtered = useMemo(
+    () => events.filter((e) => floors.includes(e.floor)),
+    [events, floors]
+  );
 
-  if (data.length === 0) {
+  const { minMs, maxMs } = useMemo(() => {
+    if (filtered.length === 0) return { minMs: 0, maxMs: 1 };
+    const starts = filtered.map((e) => new Date(e.startAt).getTime());
+    const ends = filtered.map((e) => new Date(e.endAt).getTime());
+    return {
+      minMs: Math.min(...starts),
+      maxMs: Math.max(...ends),
+    };
+  }, [filtered]);
+
+  if (filtered.length === 0) {
     return (
       <div className="flex items-center justify-center h-24 text-slate-500 text-sm">
         No precon events in this window
@@ -51,38 +41,75 @@ export default function PreconActivityChart({
     );
   }
 
+  const span = maxMs - minMs || 1;
+
+  function pct(iso: string) {
+    return ((new Date(iso).getTime() - minMs) / span) * 100;
+  }
+
+  // Rows: one per floor that has events
+  const activeFloors = floors.filter((f) =>
+    filtered.some((e) => e.floor === f)
+  );
+
   return (
-    <ResponsiveContainer width="100%" height={160}>
-      <BarChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-        <XAxis
-          dataKey="time"
-          tickFormatter={formatTime}
-          tick={{ fill: "#64748b", fontSize: 11 }}
-          interval="preserveStartEnd"
-          tickLine={false}
-          axisLine={false}
-        />
-        <YAxis hide domain={[0, 1]} />
-        <Tooltip
-          contentStyle={{
-            background: "#1e293b",
-            border: "1px solid #334155",
-            borderRadius: "6px",
-            color: "#f1f5f9",
-            fontSize: 12,
-          }}
-          labelFormatter={(label: unknown) => formatTime(String(label))}
-          formatter={(_val: unknown, name: unknown) => ["Active", String(name)]}
-        />
-        <Legend wrapperStyle={{ fontSize: 12, color: "#94a3b8", paddingTop: 4 }} />
-        {floors.includes(1) && (
-          <Bar dataKey="precon1" name="F1 Precon" fill="#a78bfa" opacity={0.8} />
-        )}
-        {floors.includes(2) && (
-          <Bar dataKey="precon2" name="F2 Precon" fill="#818cf8" opacity={0.8} />
-        )}
-      </BarChart>
-    </ResponsiveContainer>
+    <div className="flex flex-col gap-3">
+      {activeFloors.map((floor) => {
+        const floorEvents = filtered.filter((e) => e.floor === floor);
+        const color = FLOOR_COLORS[floor];
+        return (
+          <div key={floor} className="flex items-center gap-3">
+            <span className="text-slate-400 text-xs w-14 shrink-0 text-right">
+              Floor {floor}
+            </span>
+            <div className="relative flex-1 h-7 bg-slate-700/40 rounded overflow-hidden">
+              {floorEvents.map((e, i) => {
+                const left = pct(e.startAt);
+                const right = pct(e.endAt);
+                const width = Math.max(right - left, 0.3); // min 0.3% so tiny events are visible
+                return (
+                  <div
+                    key={i}
+                    title={`${formatTime(e.startAt)} → ${formatTime(e.endAt)}\nΔ ${e.deltaAtTransition.toFixed(1)}°F`}
+                    className="absolute top-0.5 bottom-0.5 rounded-sm"
+                    style={{
+                      left: `${left}%`,
+                      width: `${width}%`,
+                      backgroundColor: color.bg,
+                      opacity: 0.85,
+                    }}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Time axis */}
+      <div className="flex items-center gap-3">
+        <span className="w-14 shrink-0" />
+        <div className="flex-1 flex justify-between text-slate-500 text-xs">
+          <span>{formatTime(new Date(minMs).toISOString())}</span>
+          <span>{formatTime(new Date(maxMs).toISOString())}</span>
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div className="flex gap-4 text-xs text-slate-400 pl-[4.5rem]">
+        {activeFloors.map((floor) => (
+          <span key={floor} className="flex items-center gap-1.5">
+            <span
+              className="inline-block w-3 h-3 rounded-sm"
+              style={{ backgroundColor: FLOOR_COLORS[floor].bg }}
+            />
+            {FLOOR_COLORS[floor].label}
+            <span className="text-slate-500">
+              ({filtered.filter((e) => e.floor === floor).length} events)
+            </span>
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }

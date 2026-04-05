@@ -176,8 +176,18 @@ export async function getState(floor: 1 | 2): Promise<StateRow> {
   };
 }
 
+// DB stores naive Central Time datetimes (no timezone indicator).
+// Query `from` values must be naive CT strings too, otherwise MariaDB
+// strips the Z and compares UTC timestamps against CT values.
+// sv locale produces "YYYY-MM-DD HH:MM:SS" in the given timezone.
+function naiveCT(date: Date): string {
+  return date
+    .toLocaleString("sv", { timeZone: "America/Chicago" })
+    .replace(" ", "T");
+}
+
 export function hoursAgo(hours: number): string {
-  return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+  return naiveCT(new Date(Date.now() - hours * 60 * 60 * 1000));
 }
 
 export function daysAgo(days: number): string {

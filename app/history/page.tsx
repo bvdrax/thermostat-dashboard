@@ -7,6 +7,8 @@ import LeadMinutesChart from "@/components/LeadMinutesChart";
 import PreconActivityChart from "@/components/PreconActivityChart";
 import type { TelemetryRow } from "@/lib/types";
 import { getTelemetry, hoursAgo, daysAgo } from "@/lib/api";
+import { detectPreconEvents } from "@/lib/pid";
+import type { PreconEvent } from "@/lib/pid";
 
 type Range = "6h" | "24h" | "7d" | "30d";
 type FloorSel = "1" | "2" | "both";
@@ -40,6 +42,7 @@ export default function HistoryPage() {
   const [range, setRange] = useState<Range>("24h");
   const [floorSel, setFloorSel] = useState<FloorSel>("both");
   const [rows, setRows] = useState<TelemetryRow[]>([]);
+  const [preconEvents, setPreconEvents] = useState<PreconEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,6 +58,7 @@ export default function HistoryPage() {
         });
         if (cancelled) return;
         setRows(data);
+        setPreconEvents(detectPreconEvents(data));
         setError(null);
       } catch (e) {
         if (cancelled) return;
@@ -139,7 +143,12 @@ export default function HistoryPage() {
             <LeadMinutesChart rows={filteredRows} floors={activeFloors} />
           </ChartCard>
           <ChartCard title="Precon Activity">
-            <PreconActivityChart rows={filteredRows} floors={activeFloors} />
+            <PreconActivityChart
+              events={preconEvents.filter((e) =>
+                floorSel === "both" ? true : e.floor === Number(floorSel)
+              )}
+              floors={activeFloors}
+            />
           </ChartCard>
         </div>
       )}
